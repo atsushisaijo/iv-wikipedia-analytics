@@ -1,0 +1,27 @@
+[0m16:06:26.207076 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B5E036900>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B60A88CD0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B60A88B90>]}
+
+
+============================== 16:06:26.224128 | 972634f2-bad4-4d69-8a24-df57f08e01d6 ==============================
+[0m16:06:26.224128 [info ] [MainThread]: Running with dbt=1.8.9
+[0m16:06:26.224892 [debug] [MainThread]: running dbt with arguments {'printer_width': '80', 'indirect_selection': 'eager', 'log_cache_events': 'False', 'write_json': 'True', 'partial_parse': 'True', 'cache_selected_only': 'False', 'profiles_dir': 'C:\\Users\\asaij\\.dbt', 'version_check': 'True', 'debug': 'False', 'log_path': 'logs', 'fail_fast': 'False', 'warn_error': 'None', 'use_colors': 'True', 'use_experimental_parser': 'False', 'empty': 'None', 'quiet': 'False', 'no_print': 'None', 'warn_error_options': 'WarnErrorOptions(include=[], exclude=[])', 'static_parser': 'True', 'invocation_command': 'dbt init iv_wiki_analytics', 'introspect': 'True', 'target_path': 'None', 'log_format': 'default', 'send_anonymous_usage_stats': 'True'}
+[0m16:06:26.240953 [debug] [MainThread]: Starter project path: C:\Users\asaij\Downloads\training\iv-wikipedia-analytics\.venv\Lib\site-packages\dbt\include\starter_project
+[0m16:06:26.250460 [info ] [MainThread]: 
+Your new dbt project "iv_wiki_analytics" was created!
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m16:06:26.251160 [info ] [MainThread]: Setting up your profile.
+[0m16:06:34.897217 [debug] [MainThread]: Command `dbt init` succeeded at 16:06:34.896990 after 8.84 seconds
+[0m16:06:34.897709 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B60C3A3F0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B60CE3BF0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000020B60A76690>]}
+[0m16:06:34.898167 [debug] [MainThread]: Flushing usage events

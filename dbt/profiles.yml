@@ -1,0 +1,6 @@
+iv_wiki_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: wikipedia.duckdb
