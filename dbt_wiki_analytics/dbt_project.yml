@@ -2,11 +2,11 @@
 # Name your project! Project names should contain only lowercase characters
 # and underscores. A good package name should reflect your organization's
 # name or the intended use of these models
-name: 'iv_wiki_analytics'
+name: 'dbt_wiki_analytics'
 version: '1.0.0'
 
 # This setting configures which "profile" dbt uses for this project.
-profile: 'iv_wiki_analytics'
+profile: 'dbt_wiki_analytics'
 
 # These configurations specify where dbt should look for different types of files.
 # The `model-paths` config, for example, states that models in this project can be
@@ -22,15 +22,14 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
-
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
-# In this example config, we tell dbt to build all models in the example/
-# directory as views. These settings can be overridden in the individual model
-# files using the `{{ config(...) }}` macro.
+vars:
+  target_date: '2024-10-31'
+
 models:
-  iv_wiki_analytics:
+  dbt_wiki_analytics:
     # Config indicated by + and applies to all files under models/example/
-    example:
+    iv_wikipedia_analysis:
       +materialized: view
