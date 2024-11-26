@@ -1,37 +1,49 @@
 import os
 import requests
 import duckdb
+import sys  # for log deletion
 import pandas as pd
 import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import logging
-from pathlib import Path
-
-# Check if log file exists and delete it
-log_file = Path('../logs/py_exec.log')
-
-if log_file.exists():
-    try:
-        log_file.unlink()  # delete
-    except Exception as e:
-        pass
-
-# logging is used for batch process - no logger.info() allowed
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('..\logs\py_exec.log'),  # logging to file
-        logging.StreamHandler()  # logging to console
-    ]
-)
-
-logger = logging.getLogger(__name__)
+from contextlib import closing
 
 
+# ____implementing logging for whole process____
+class PipelineLogger:
+    def __init__(self, log_path='../logs/py_exec.log'):
+        self.log_path = log_path
+        self.logger = self.setup_logger()
+
+    def setup_logger(self):
+        # Delete log file if it exists
+        if os.path.exists(self.log_path):
+            try:
+                for handler in logging.root.handlers[:]:
+                    with closing(handler):
+                        logging.root.removeHandler(handler)
+                os.remove(self.log_path)
+            except Exception as e:
+                sys.stdout.write(f"Error deleting log file: {str(e)}\n")
+                sys.stdout.flush()
+
+        # Initiate logging process - standard templated code
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(self.log_path),
+                logging.StreamHandler()
+            ]
+        )
+
+        return logging.getLogger(__name__)
+
+
+# ____initial variables to be shared through dataclass____
 @dataclass
-class WikiConfig:
+class ApiConfig:
     """
     Wikipedia API parameters: @dataclass is used to pass values to other classes
     refer https://en.wikipedia.org/w/api.php?action=help&modules=query
@@ -45,26 +57,32 @@ class WikiConfig:
     tumbling_window_size: int = 30  # API tumbling window in seconds
 
 
-class IvWikipediaAnalytics:
+# ____main pipeline class____
+class IvWikipediaData:
     """
     Class to handle Wikipedia analytics including API data fetching and processing.
 
     Attributes:
-        config: WikiConfig object containing API configuration
+        config: ApiConfig object containing API configuration
         df: pandas DataFrame to store the collected data
-        config: Optional[WikiConfig] = None
+        config: Optional[ApiConfig] = None
     """
 
-    def __init__(self, config: Optional[WikiConfig] = None):
-        # passed constant variables through a dataclass as default
-        # if no config is provided, union with WikiConfig object
-        self.config = config or WikiConfig()
+    def __init__(self, config):
 
-        # created to concatenate (append) each extracted data through API call.
+        # if no configuration is supplied, default values of @dataclass is used
+        # highly likely to have smaller tumbling window size
+        self.config = config or ApiConfig()
+
+        # empty dataframe to append dataframe of each API call.
         self.df = self._create_empty_dataframe()
 
     def _create_empty_dataframe(self) -> pd.DataFrame:
-        """Create empty DataFrame with the schema for Wikipedia edit data."""
+        """
+        Create empty DataFrame with the schema for Wikipedia edit data.
+        This dataframe serves as a base to append into this dataframe,
+        with data comes from tumbling window.
+        """
         return (pd.DataFrame(columns=[
             'type', 'ns', 'title', 'user', 'userid', 'bot',
             'oldlen', 'newlen', 'timestamp', 'comment',
@@ -89,15 +107,17 @@ class IvWikipediaAnalytics:
 
     def _get_api_params(self, rcstart: str, rcend: str) -> Dict:
         """
-        Create a dictionary as an API parameters.
+        Create a dictionary of an API parameters:
+        https://en.wikipedia.org/w/api.php?action=help&modules=query%2Brecentchanges
         rcstart and rcend are passed as argument in each tumbling window
+        !!! note rcstart = ending time in business sense, vice verca
 
         Args:
             rcstart: Start timestamp (upper limit of timeframe - ending timestamp)
             rcend: End timestamp (lower limit of timeframe - starting timestamp)
 
         Returns:
-            Dictionary of API parameters
+            Dictionary of API parameters for each API call
         """
         return {
             "action": "query",
@@ -109,13 +129,14 @@ class IvWikipediaAnalytics:
             "rcprop": "title|timestamp|userid|user|comment|flags|sizes"
         }
 
-    def _fetch_window_data(self, start_time: str, end_time: str) -> pd.DataFrame:
+    def _fetch_tumbling_window_data(self, start_time: str, end_time: str) -> pd.DataFrame:
         """
         Fetch data for a specific time window.
+        Follow the API specification of .json()['query']['recentchanges']
 
         Args:
-            start_time: yyyy-MM-ddTHH:mm:ssZ (larger than end_time)
-            end_time: yyyy-MM-ddTHH:mm:ssZ (smaller than start_time)
+            start_time: yyyy-MM-ddTHH:mm:ssZ (confusingly, means ending time)
+            end_time: yyyy-MM-ddTHH:mm:ssZ (confusingly means starting time)
 
         Returns:
             DataFrame containing the fetched data within the tumbling window
@@ -125,6 +146,9 @@ class IvWikipediaAnalytics:
             or request fails by unspecific reasons
         """
         params = self._get_api_params(end_time, start_time)
+        # for verification in log-file, param is recorded
+        logger.info(f"Current param is defined as: {params}")
+
         response = requests.get(self.config.base_url, params=params)
 
         if response.status_code != 200:
@@ -132,23 +156,26 @@ class IvWikipediaAnalytics:
             logger.error(f"Response text: {response.text}")
             raise SystemExit(f'API request failed: {response.text}')
 
-        edit_records = response.json()['query']['recentchanges']
-        window_df = pd.DataFrame(edit_records)
+        else:
+            edit_records = response.json()['query']['recentchanges']
+            window_df = pd.DataFrame(edit_records)
+            logger.info(f"Current tumbling window records: {len(window_df)}")
 
-        if len(window_df) == self.config.limit:
-            raise SystemExit('Error: reached max records')
+            # if it reached 500, abend the pipeline - tumbling window must be adjusted to smaller frame
+            if len(window_df) == self.config.limit:
+                raise SystemExit('Error: reached max records for tumbling window')
 
         return window_df
 
-    def get_api_data(self, input_date: str) -> pd.DataFrame:
+    def _get_api_data(self, input_date: str) -> pd.DataFrame:
         """
-        Collect Wikipedia edit data for an entire day using tumbling windows.
+        Collect Wikipedia edit data for a specific day (24 hours) using tumbling windows.
 
         Args:
             input_date: Date string in format 'YYYY-MM-DD'
 
         Returns:
-            DataFrame containing all collected data
+            DataFrame containing all data
         """
         target_date = datetime.datetime.strptime(input_date, "%Y-%m-%d").date()
         start_time = datetime.datetime.combine(target_date, datetime.time(0, 0, 0))
@@ -160,7 +187,10 @@ class IvWikipediaAnalytics:
             rcend_str = current_window_start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
             logger.info(f"Current window start time: {rcend_str}")
 
+            # start time used in calculating ending time as well as next loop
             current_window_start_time += datetime.timedelta(seconds=self.config.tumbling_window_size)
+
+            # the calculated window may overshoot the ending timestamp
             current_window_end_time = min(
                 current_window_start_time - datetime.timedelta(seconds=1),
                 end_time
@@ -169,13 +199,19 @@ class IvWikipediaAnalytics:
             rcstart_str = current_window_end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
             logger.info(f"Current window end time: {rcstart_str}")
 
-            window_df = self._fetch_window_data(rcend_str, rcstart_str)
+            # get dataframe of the tumbling window - note the position of arguments
+            window_df = self._fetch_tumbling_window_data(rcend_str, rcstart_str)
+
+            # append dataframe into df
             self.df = pd.concat([self.df, window_df], ignore_index=True)
-            logger.info(f"Current total size: {len(self.df)}")
+            logger.info(f"Current total records: {len(self.df)}")
+
+            # delete the temporal df for minimizing memory impact
+            del window_df
 
         return self.df
 
-    def save_to_duckdb(self, df: pd.DataFrame, database_path: str, table_name: str, schema: str = 'iv') -> None:
+    def _save_to_duckdb(self, df: pd.DataFrame, database_path: str, table_name: str, schema: str = 'iv') -> None:
         """
         Save collected data to DuckDB - here dropping and re-creating table itself.
         The truncate option will increase code base.
@@ -189,9 +225,13 @@ class IvWikipediaAnalytics:
             # Create schema
             conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
 
-            # Create or replace table
+            # full db table name
             full_table_name = f"{schema}.{table_name}"
+
+            # drop table if exists
             conn.execute(f"DROP TABLE IF EXISTS {full_table_name}")
+
+            # create table
             conn.execute(f"""CREATE TABLE IF NOT EXISTS {full_table_name} (
                             type VARCHAR,
                             title VARCHAR,
@@ -199,8 +239,11 @@ class IvWikipediaAnalytics:
                             userid BIGINT,
                             timestamp TIMESTAMP,
                             comment VARCHAR
+                            )
                             """
                          )
+
+            # insert into the table - CTAS was avoided for concern of type not inferred as typed
             conn.execute(f"""
                             INSERT INTO {full_table_name}
                             SELECT type, title, user, userid, timestamp, comment FROM df
@@ -209,22 +252,30 @@ class IvWikipediaAnalytics:
 
 
 if __name__ == "__main__":
+
+    object_logger = PipelineLogger()  # instantiate logger class
+    logger = object_logger.logger  # start logging
+
+    logger.info("API python pipeline has started")
+
     # Initialize with custom config
-    config = WikiConfig(
-        tumbling_window_size=30,  # 30-second tumbling window
+    config = ApiConfig(
+        tumbling_window_size=25,  # default is 30-second tumbling window
     )
 
-    wiki_analytics = IvWikipediaAnalytics(config)
+    object_ivwikipediadata = IvWikipediaData(config)
 
     try:
-        # Collect data for 2024-10-31
-        df = wiki_analytics.get_api_data('2024-10-31')
+        # extract data via API
+        df = object_ivwikipediadata._get_api_data('2024-10-31')
 
         # Save to DuckDB
-        wiki_analytics.save_to_duckdb(
-            database_path='wikipedia.db',
+        object_ivwikipediadata._save_to_duckdb(
+            df=df,
+            database_path='..\data\wikipedia.db',
             table_name='wiki_edits'
         )
+        logger.info("API python pipeline has successfully completed")
 
     except Exception as e:
-        logger.info(f"Error: {e}")
+        logger.error(f"Error: {e}")
