@@ -272,8 +272,8 @@ if __name__ == "__main__":
         # Save to DuckDB
         object_ivwikipediadata._save_to_duckdb(
             df=df,
-            database_path='..\data\wikipedia.db',
-            table_name='wiki_edits'
+            database_path="../data/wikipedia.db",
+            table_name="wiki_edits"
         )
         logger.info("API python pipeline has successfully completed")
 
