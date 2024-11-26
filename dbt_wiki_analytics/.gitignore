@@ -1,4 +1,6 @@
-
+.gitignore
+.idea/
 target/
 dbt_packages/
 logs/
+**/___pycache___/
