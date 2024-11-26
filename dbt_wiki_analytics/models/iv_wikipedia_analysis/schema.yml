@@ -1,0 +1,62 @@
+
+version: 2
+
+sources:
+  - name: wikipedia_api
+    database: wikipedia
+    schema: iv      # this should match your source schema
+    tables:
+      - name: wiki_edits  # this should match your source table name
+
+models:
+  - name: api_edits_base
+    description: "persisted table, given by the python code of API-call"
+    columns:
+      - name: type
+        description: "change type, currently with 4 types - edit, categorize, log, new, varchar"
+      - name: title
+        description: "title of Wikipedia, varchar"
+      - name: user
+        description: "user name, varchar"
+      - name: userid
+        description: "discretionary value of user ID of Wikipedia, varchar"
+      - name: timestamp
+        description: "timestamp of edited time, timestamp"
+        tests:
+          - not_null
+      - name: comment
+        description: "description of changes, varchar"
+
+  - name: timeseries_base
+    description: "calculated sliding window as a view: 30-minute time slots with 15-minute shifts"
+    columns:
+      - name: sliding_window_start
+        description: "Start time of the sliding window of 30-minute with 15 minutes shift"
+        tests:
+          - unique
+          - not_null
+      - name: sliding_window_end
+        description: "End time of the sliding window of 30-minute with 15 minutes shift"
+        tests:
+          - unique
+          - not_null
+
+  - name: ranked_edits
+    description: "Ranked time slots by number of changes, with additional metrics, stored as table"
+    columns:
+      - name: sliding_window_start
+        description: "Start time of the sliding window of 30-minute with 15 minutes shift"
+        tests:
+          - unique
+          - not_null
+      - name: sliding_window_end
+        description: "End time of the sliding window of 30-minute with 15 minutes shift"
+        tests:
+          - unique
+          - not_null
+      - name: changes_count
+        description: "Total number of changes in the time slot"
+        tests:
+          - not_null
+      - name: unique_users
+        description: "unique number of users who commit the change"
